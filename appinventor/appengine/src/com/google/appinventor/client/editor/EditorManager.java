@@ -1,6 +1,6 @@
 // -*- mode: java; c-basic-offset: 2; -*-
 // Copyright 2009-2011 Google, All Rights reserved
-// Copyright 2011-2012 MIT, All rights reserved
+// Copyright 2011-2025 MIT, All rights reserved
 // Released under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
@@ -11,8 +11,8 @@ import static com.google.appinventor.client.Ode.MESSAGES;
 import com.google.appinventor.client.ErrorReporter;
 import com.google.appinventor.client.Ode;
 import com.google.appinventor.client.OdeAsyncCallback;
+import com.google.appinventor.client.editor.blocks.BlocksCodeGenerationException;
 import com.google.appinventor.client.editor.youngandroid.YaBlocksEditor;
-import com.google.appinventor.client.editor.youngandroid.YailGenerationException;
 import com.google.appinventor.client.explorer.project.Project;
 import com.google.appinventor.client.settings.project.ProjectSettings;
 import com.google.appinventor.shared.rpc.BlocksTruncatedException;
@@ -214,53 +214,59 @@ public final class EditorManager {
     }
 
     /**
-     * For each block editor (screen) in the current project, generate and save yail code for the blocks.
+     * For each block editor (screen) in the current project, generate and save yail code for the 
+     * blocks.
      *
-     * @param successCommand optional command to be executed if yail generation and saving succeeds.
-     * @param failureCommand optional command to be executed if yail generation and saving fails.
+     * @param successCommand  optional command to be executed if yail generation and saving succeeds.
+     * @param failureCommand  optional command to be executed if yail generation and saving fails.
      */
-    public void generateYailForBlocksEditors(final Command successCommand, final Command failureCommand) {
-        List<FileDescriptorWithContent> yailFiles = new ArrayList<>();
-        long currentProjectId = Ode.getInstance().getCurrentYoungAndroidProjectId();
-        for (long projectId : openProjectEditors.keySet()) {
-            if (projectId == currentProjectId) {
-                ProjectEditor projectEditor = openProjectEditors.get(projectId);
-                for (FileEditor fileEditor : projectEditor.getOpenFileEditors()) {
-                    if (fileEditor instanceof YaBlocksEditor) {
-                        YaBlocksEditor yaBlocksEditor = (YaBlocksEditor) fileEditor;
-                        try {
-                            yailFiles.add(yaBlocksEditor.getYail());
-                        } catch (YailGenerationException e) {
-                            ErrorReporter.reportInfo(MESSAGES.yailGenerationError(e.getFormName(), e.getMessage()));
-                            if (failureCommand != null) {
-                                failureCommand.execute();
-                            }
-                            return;
-                        }
-                    }
+    public void generateYailForBlocksEditors(final Command successCommand, 
+        final Command failureCommand) {
+      List<FileDescriptorWithContent> yailFiles =  new ArrayList<FileDescriptorWithContent>();
+      long currentProjectId = Ode.getInstance().getCurrentYoungAndroidProjectId();
+      for (long projectId : openProjectEditors.keySet()) {
+        if (projectId == currentProjectId) {
+          // Generate yail for each blocks editor in this project and add it to the list of 
+          // yail files. If an error occurs we stop the generation process, report the error, 
+          // and return without executing nextCommand.
+          ProjectEditor projectEditor = openProjectEditors.get(projectId);
+          for (FileEditor fileEditor : projectEditor.getOpenFileEditors()) {
+            if (fileEditor instanceof YaBlocksEditor) {
+              YaBlocksEditor yaBlocksEditor = (YaBlocksEditor) fileEditor;
+              try {
+                yailFiles.add(yaBlocksEditor.getYail());
+              } catch (BlocksCodeGenerationException e) {
+                ErrorReporter.reportInfo(MESSAGES.yailGenerationError(e.getEntityName(),
+                    e.getMessage()));
+                if (failureCommand != null) {
+                  failureCommand.execute();
                 }
-                break;
+                return;
+              }
             }
+          }
+          break;
         }
+      }
 
-        Ode.getInstance().getProjectService().save(Ode.getInstance ().getSessionId(),
-            yailFiles,
-            new OdeAsyncCallback<Long>(MESSAGES.saveErrorMultipleFiles()) {
-                @Override
-                public void onSuccess(Long date) {
-                    if (successCommand != null) {
-                        successCommand.execute();
-                    }
-                }
+      Ode.getInstance().getProjectService().save(Ode.getInstance ().getSessionId(),
+          yailFiles,
+          new OdeAsyncCallback<Long>(MESSAGES.saveErrorMultipleFiles()) {
+              @Override
+              public void onSuccess(Long date) {
+                  if (successCommand != null) {
+                      successCommand.execute();
+                  }
+              }
 
-                @Override
-                public void onFailure(Throwable caught) {
-                    super.onFailure(caught);
-                    if (failureCommand != null) {
-                        failureCommand.execute();
-                    }
-                }
-            });
+              @Override
+              public void onFailure(Throwable caught) {
+                  super.onFailure(caught);
+                  if (failureCommand != null) {
+                      failureCommand.execute();
+                  }
+              }
+          });
     }
 
     /**
